@@ -1,0 +1,6 @@
+{
+  "name": "Wedding Guest Manager | نظام إدارة ضيوف الزفاف",
+  "description": "نظام احترافي شامل لإدارة وتنظيم ضيوف حفلات الزفاف، التحكم في الطاولات وسعتها، إحصائيات الحضور وتوزيع الأفراد، وتصدير التقارير إلى Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

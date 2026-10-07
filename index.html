@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wedding Guest Manager | نظام إدارة ضيوف الزفاف</title>
+    <meta name="description" content="نظام احترافي شامل لإدارة وتنظيم ضيوف حفلات الزفاف، التحكم في الطاولات وسعتها، إحصائيات الحضور وتوزيع الأفراد، وتصدير التقارير إلى Excel." />
+    <meta property="og:title" content="Wedding Guest Manager | نظام إدارة ضيوف الزفاف" />
+    <meta property="og:description" content="نظام احترافي شامل لإدارة وتنظيم ضيوف حفلات الزفاف، التحكم في الطاولات وسعتها، إحصائيات الحضور وتوزيع الأفراد، وتصدير التقارير إلى Excel." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      // Gracefully ignore WebSocket / HMR connection errors per runtime environment guidelines
+      window.addEventListener('error', function(e) {
+        var msg = e && (e.message || '');
+        var file = (e && e.filename) || '';
+        if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('createWebSocketModuleRunnerTransport') !== -1 || file.indexOf('@vite/client') !== -1) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        var reasonStr = (e && e.reason) ? String(e.reason) : '';
+        if (reasonStr.indexOf('WebSocket') !== -1 || reasonStr.indexOf('createWebSocketModuleRunnerTransport') !== -1) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body class="bg-neutral-50 text-neutral-900 antialiased selection:bg-amber-100 selection:text-amber-900 font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
