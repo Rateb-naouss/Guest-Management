@@ -6,20 +6,24 @@ import { AuthRequest } from '../middleware/auth.js';
 export class AuthController {
   static async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body;
+      let { email, password } = req.body;
 
-      if (!email || !password) {
+      if (!password) {
         return res.status(400).json({
           success: false,
-          message: 'يرجى إدخال البريد الإلكتروني وكلمة المرور',
+          message: 'يرجى إدخال كلمة مرور المشرف',
         });
+      }
+
+      if (!email) {
+        email = 'admin@wedding.com';
       }
 
       const user = await UserModel.findByEmail(email);
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'بيانات الدخول غير صحيحة: البريد الإلكتروني غير مسجل',
+          message: 'بيانات الدخول غير صحيحة: حساب المشرف غير مسجل',
         });
       }
 

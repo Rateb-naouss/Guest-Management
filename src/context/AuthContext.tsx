@@ -7,7 +7,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (passwordOrEmail: string, maybePass?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -43,8 +43,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
-  const login = async (email: string, pass: string) => {
-    const data = await api.login(email, pass);
+  const login = async (passwordOrEmail: string, maybePass?: string) => {
+    const data = await api.login(passwordOrEmail, maybePass);
     localStorage.setItem('wedding_auth_token', data.token);
     setToken(data.token);
     setUser(data.user);

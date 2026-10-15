@@ -24,7 +24,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   // Auth
-  async login(email: string, password: string): Promise<{ token: string; user: User; message: string }> {
+  async login(passwordOrEmail: string, maybePassword?: string): Promise<{ token: string; user: User; message: string }> {
+    const email = maybePassword !== undefined ? passwordOrEmail : 'admin@wedding.com';
+    const password = maybePassword !== undefined ? maybePassword : passwordOrEmail;
+
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
