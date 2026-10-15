@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import { MongoClient, Db } from 'mongodb';
 
 export interface UserDoc {
   _id: string;
@@ -67,9 +68,122 @@ class MongoDatabase {
 
   private isLoaded = false;
   private saveTimeout: NodeJS.Timeout | null = null;
+  private mongoClient: MongoClient | null = null;
+  private atlasDb: Db | null = null;
+  private isAtlasConnected = false;
+  private atlasStatusMessage = 'جاري الاتصال بقاعدة بيانات MongoDB Atlas...';
+  private reconnectInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.init();
+    this.initMongoAtlas().catch((err) => {
+      console.warn('Initial Atlas connection check:', err?.message || err);
+    });
+  }
+
+  public async initMongoAtlas() {
+    const uri = process.env.MONGODB_URI;
+    if (!uri || !uri.startsWith('mongodb')) return;
+
+    try {
+      if (this.mongoClient) {
+        try { await this.mongoClient.close(); } catch {}
+      }
+
+      this.mongoClient = new MongoClient(uri, {
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+      });
+
+      await this.mongoClient.connect();
+      this.atlasDb = this.mongoClient.db('wedding_guest_manager');
+      this.isAtlasConnected = true;
+      this.atlasStatusMessage = 'متصل بنجاح مع MongoDB Atlas (مباشر ومفعّل)';
+      console.log('✓ Successfully connected to user live MongoDB Atlas database (wedding_guest_manager)!');
+
+      // Create indexes
+      try {
+        await this.atlasDb.collection('guests').createIndex({ fullName: 1 });
+        await this.atlasDb.collection('guests').createIndex({ phoneNumber: 1 });
+        await this.atlasDb.collection('tables').createIndex({ tableNumber: 1 });
+      } catch (idxErr) {
+        // index creation error ignored
+      }
+
+      // Sync data bidirectionally
+      await this.syncWithAtlas();
+
+      if (this.reconnectInterval) {
+        clearInterval(this.reconnectInterval);
+        this.reconnectInterval = null;
+      }
+    } catch (err: any) {
+      this.isAtlasConnected = false;
+      const isSslAlert = err.message && (err.message.includes('SSL') || err.message.includes('alert'));
+      this.atlasStatusMessage = isSslAlert
+        ? 'يتطلب السماح بالوصول لعنوان IP في MongoDB Atlas (Network Access -> Add 0.0.0.0/0)'
+        : (err.message || 'فشل الاتصال بـ MongoDB Atlas');
+      
+      console.warn('MongoDB Atlas status notice:', this.atlasStatusMessage);
+
+      if (!this.reconnectInterval) {
+        this.reconnectInterval = setInterval(() => {
+          if (!this.isAtlasConnected) {
+            this.initMongoAtlas().catch(() => {});
+          } else if (this.reconnectInterval) {
+            clearInterval(this.reconnectInterval);
+            this.reconnectInterval = null;
+          }
+        }, 15000);
+      }
+    }
+  }
+
+  private async syncWithAtlas() {
+    if (!this.atlasDb || !this.isAtlasConnected) return;
+
+    try {
+      const atlasGuestsCount = await this.atlasDb.collection('guests').countDocuments();
+      const atlasTablesCount = await this.atlasDb.collection('tables').countDocuments();
+
+      if (atlasGuestsCount > 0 || atlasTablesCount > 0) {
+        // Atlas has data, hydrate local memory from Atlas
+        const atlasGuests = (await this.atlasDb.collection('guests').find({}).toArray()) as any[];
+        const atlasTables = (await this.atlasDb.collection('tables').find({}).toArray()) as any[];
+        const atlasUsers = (await this.atlasDb.collection('users').find({}).toArray()) as any[];
+
+        if (atlasGuests.length > 0) this.data.guests = atlasGuests;
+        if (atlasTables.length > 0) this.data.tables = atlasTables;
+        if (atlasUsers.length > 0) this.data.users = atlasUsers;
+        this.saveSync();
+        console.log(`✓ Hydrated ${atlasGuests.length} guests and ${atlasTables.length} tables from MongoDB Atlas.`);
+      } else {
+        // Atlas is fresh, upload current tables and guests to Atlas
+        if (this.data.tables.length > 0) {
+          await this.atlasDb.collection('tables').insertMany(this.data.tables.map(t => ({ ...t })) as any);
+        }
+        if (this.data.guests.length > 0) {
+          await this.atlasDb.collection('guests').insertMany(this.data.guests.map(g => ({ ...g })) as any);
+        }
+        if (this.data.users.length > 0) {
+          await this.atlasDb.collection('users').insertMany(this.data.users.map(u => ({ ...u })) as any);
+        }
+        console.log(`✓ Seeded ${this.data.guests.length} guests and ${this.data.tables.length} tables directly into your MongoDB Atlas!`);
+      }
+    } catch (err: any) {
+      console.error('Atlas sync error:', err.message);
+    }
+  }
+
+  public getAtlasStatus() {
+    return {
+      connected: this.isAtlasConnected,
+      message: this.atlasStatusMessage,
+      database: 'wedding_guest_manager',
+      cluster: 'cluster0.kgpxuyz.mongodb.net',
+      tablesCount: this.data.tables.length,
+      guestsCount: this.data.guests.length,
+    };
   }
 
   private init() {
@@ -155,8 +269,45 @@ class MongoDatabase {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+
+      // Asynchronously push to Atlas if connected
+      if (this.atlasDb && this.isAtlasConnected) {
+        this.persistToAtlasAsync().catch(err => console.warn('Atlas async persist error:', err.message));
+      }
     } catch (err) {
       console.error('Failed to persist database to disk:', err);
+    }
+  }
+
+  private async persistToAtlasAsync() {
+    if (!this.atlasDb || !this.isAtlasConnected) return;
+
+    try {
+      // Bulk write guests
+      const guestBulk = this.data.guests.map(g => ({
+        replaceOne: {
+          filter: { _id: g._id },
+          replacement: g,
+          upsert: true,
+        }
+      }));
+      if (guestBulk.length > 0) {
+        await this.atlasDb.collection('guests').bulkWrite(guestBulk as any);
+      }
+
+      // Bulk write tables
+      const tableBulk = this.data.tables.map(t => ({
+        replaceOne: {
+          filter: { _id: t._id },
+          replacement: t,
+          upsert: true,
+        }
+      }));
+      if (tableBulk.length > 0) {
+        await this.atlasDb.collection('tables').bulkWrite(tableBulk as any);
+      }
+    } catch (err: any) {
+      console.warn('Atlas bulk write notice:', err.message);
     }
   }
 

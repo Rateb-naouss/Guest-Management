@@ -13,9 +13,14 @@ apiRouter.use('/tables', tableRoutes);
 apiRouter.use('/stats', statsRoutes);
 apiRouter.use('/export', exportRoutes);
 
-// Health check
+// Health check & Database Status
 apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'wedding-guest-manager-api', timestamp: new Date().toISOString() });
+});
+
+apiRouter.get('/system/db-status', async (req, res) => {
+  const { db } = await import('../config/db.js');
+  res.json({ success: true, ...db.getAtlasStatus() });
 });
 
 export default apiRouter;
